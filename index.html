@@ -1,0 +1,118 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini TTS & Chat</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🗣️</text></svg>">
+    <link rel="stylesheet" href="index.css">
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="app-container">
+        <header>
+            <div class="header-content">
+                <div>
+                    <h1>Gemini TTS & Chat</h1>
+                    <p class="app-description">
+                        Use a seção superior para gerar fala a partir de texto. Digite seu roteiro, configure o(s) locutor(es) e gere o áudio. 
+                        Se usar múltiplos locutores, use tags no seu roteiro (ex: <code>Locutor 1: Olá.</code><code>Locutor 2: Oi!</code>) 
+                        e associe os nomes na configuração. Use a seção inferior para conversar com Gemini.
+                    </p>
+                </div>
+                <button id="theme-toggle-btn" class="theme-toggle" aria-label="Alternar tema" title="Alternar tema">
+                    <svg id="theme-icon-sun" class="theme-icon" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18M20,15.31L23.31,12L20,8.69V4H15.31L12,0.69L8.69,4H4V8.69L0.69,12L4,15.31V20H8.69L12,23.31L15.31,20H20V15.31Z" />
+                    </svg>
+                    <svg id="theme-icon-moon" class="theme-icon" viewBox="0 0 24 24">
+                        <path fill="currentColor" d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95M17.33,17.97C14.5,17.81 11.7,16.64 9.53,14.5C7.36,12.31 6.2,9.5 6.04,6.68C3.23,9.82 3.34,14.64 6.35,17.66C9.37,20.67 14.19,20.78 17.33,17.97Z" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <main>
+            <section id="tts-section">
+                <h2>Texto para Fala</h2>
+                <div id="error-message" class="error-message" role="alert" style="display: none;"></div>
+                
+                <textarea id="script-input" placeholder="Digite seu roteiro aqui, ex:&#10;Alice: Olá Bob!&#10;Bob: Oi Alice, como você está?"></textarea>
+                
+                <div class="model-selection">
+                    <label for="model-selector">Modelo TTS:</label>
+                    <select id="model-selector">
+                        <option value="gemini-2.5-flash-preview-tts" selected>Gemini 2.5 Flash</option>
+                        <option value="gemini-2.5-pro-preview-tts">Gemini 2.5 Pro</option>
+                    </select>
+                </div>
+                
+                <button id="generate-speech-btn" class="btn btn-primary btn-block">Gerar Fala</button>
+                <div id="loading-indicator" class="loading" style="display: none;">
+                    <span>Gerando fala...</span>
+                    <div class="spinner"></div>
+                </div>
+                
+                <div id="speaker-config">
+                    <h3>Configuração de Locutores</h3>
+                    <div id="speaker-list">
+                        <!-- Speaker entries will be added here -->
+                    </div>
+                    <button id="add-speaker-btn" class="btn btn-secondary">Adicionar Locutor</button>
+                </div>
+            </section>
+
+            <section id="output-section">
+                <h2>Áudio Gerado</h2>
+                <div id="audio-output-container">
+                    <!-- Audio output will be placed here -->
+                </div>
+            </section>
+
+            <section id="chat-section">
+                <h2>Chat com Gemini</h2>
+                <div id="chat-error-message" class="error-message" role="alert" style="display: none;"></div>
+                
+                <div class="chat-container">
+                    <div id="chat-history-container" role="log">
+                        <!-- Chat messages will be added here -->
+                    </div>
+                    
+                    <div class="chat-input-container">
+                        <textarea id="chat-input" placeholder="Digite sua mensagem..." rows="1"></textarea>
+                        <button id="send-chat-message-btn" class="btn btn-primary">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="chat-loading-indicator" class="loading" style="display: none;">
+                    <span>Gemini está digitando...</span>
+                    <div class="spinner"></div>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Desenvolvido com Gemini AI por SONYDDR</p>
+        </footer>
+    </div>
+
+    <script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://esm.sh/@google/genai@^1.5.1",
+    "marked": "https://esm.sh/marked@^15.0.12",
+    "path": "https://esm.sh/path@^0.12.7",
+    "vite": "https://esm.sh/vite@^7.3.0"
+  }
+}
+</script>
+    <script type="module" src="index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
