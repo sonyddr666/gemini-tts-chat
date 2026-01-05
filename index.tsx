@@ -1,17 +1,25 @@
-
 import { GoogleGenAI, GenerateContentResponse, Chat, Modality } from "@google/genai";
-import { marked } from "marked"; // For rendering Markdown from chat
+import { marked } from "marked";
 import { ttsManual } from "./ttsManual";
 
-// Ensure API_KEY is available in the environment.
-const API_KEY = process.env.API_KEY!;
+// API Key Management
+let API_KEY: string = "";
+
+// Config Modal Elements
+const configModal = document.getElementById('config-modal') as HTMLDivElement | null;
+const apiKeyInput = document.getElementById('api-key-input') as HTMLInputElement | null;
+const saveApiKeyBtn = document.getElementById('save-api-key-btn') as HTMLButtonElement | null;
+const clearApiKeyBtn = document.getElementById('clear-api-key-btn') as HTMLButtonElement | null;
+const closeConfigBtn = document.getElementById('close-config-btn') as HTMLButtonElement | null;
+const configButton = document.getElementById('config-button') as HTMLButtonElement | null;
+const apiKeyStatus = document.getElementById('api-key-status') as HTMLSpanElement | null;
 
 // TTS Elements
 const scriptInput = document.getElementById('script-input') as HTMLTextAreaElement | null;
 const speakerListDiv = document.getElementById('speaker-list') as HTMLDivElement | null;
 const addSpeakerBtn = document.getElementById('add-speaker-btn') as HTMLButtonElement | null;
 const generateSpeechBtn = document.getElementById('generate-speech-btn') as HTMLButtonElement | null;
-const loadingIndicator = document.getElementById('loading-indicator') as HTMLDivElement | null; // For TTS
+const loadingIndicator = document.getElementById('loading-indicator') as HTMLDivElement | null;
 const audioOutputContainer = document.getElementById('audio-output-container') as HTMLDivElement | null;
 const ttsErrorMessageDiv = document.getElementById('error-message') as HTMLDivElement | null;
 const modelSelector = document.getElementById('model-selector') as HTMLSelectElement | null;
@@ -21,24 +29,142 @@ const chatSection = document.getElementById('chat-section') as HTMLElement | nul
 const chatHistoryContainer = document.getElementById('chat-history-container') as HTMLDivElement | null;
 const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement | null;
 const sendChatMessageBtn = document.getElementById('send-chat-message-btn') as HTMLButtonElement | null;
-const chatLoadingIndicator = document.getElementById('chat-loading-indicator') as HTMLDivElement | null; // For Chat
+const chatLoadingIndicator = document.getElementById('chat-loading-indicator') as HTMLDivElement | null;
 const chatErrorMessageDiv = document.getElementById('chat-error-message') as HTMLDivElement | null;
 
 let geminiChat: Chat | null = null;
+let ai: GoogleGenAI | null = null;
 
 // Theme Toggle Elements
 const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement | null;
 
-
-if (!API_KEY) {
-    console.error("API_KEY is missing. Please set the environment variable.");
-    if (ttsErrorMessageDiv) {
-        ttsErrorMessageDiv.textContent = "A Chave da API Gemini não está configurada. Por favor, garanta que a variável de ambiente API_KEY esteja definida.";
-        ttsErrorMessageDiv.style.display = 'block';
+// --- API Key Management Functions ---
+function loadApiKey(): void {
+    const savedKey = localStorage.getItem('gemini_api_key');
+    if (savedKey) {
+        API_KEY = savedKey;
+        updateApiKeyStatus(true);
+        initializeAI();
+    } else {
+        updateApiKeyStatus(false);
+        showApiKeyWarning();
     }
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+function saveApiKey(): void {
+    if (!apiKeyInput) return;
+    const key = apiKeyInput.value.trim();
+    if (key) {
+        API_KEY = key;
+        localStorage.setItem('gemini_api_key', key);
+        updateApiKeyStatus(true);
+        initializeAI();
+        closeConfigModal();
+        hideApiKeyWarning();
+        if (ttsErrorMessageDiv) {
+            ttsErrorMessageDiv.textContent = 'Chave API salva com sucesso!';
+            ttsErrorMessageDiv.className = 'success-message';
+            ttsErrorMessageDiv.style.display = 'block';
+            setTimeout(() => {
+                ttsErrorMessageDiv.style.display = 'none';
+                ttsErrorMessageDiv.className = 'error-message';
+            }, 3000);
+        }
+    } else {
+        alert('Por favor, insira uma chave API válida.');
+    }
+}
+
+function clearApiKey(): void {
+    if (confirm('Tem certeza que deseja remover a chave API salva?')) {
+        API_KEY = "";
+        localStorage.removeItem('gemini_api_key');
+        updateApiKeyStatus(false);
+        ai = null;
+        geminiChat = null;
+        if (apiKeyInput) apiKeyInput.value = '';
+        showApiKeyWarning();
+        closeConfigModal();
+    }
+}
+
+function updateApiKeyStatus(hasKey: boolean): void {
+    if (apiKeyStatus) {
+        apiKeyStatus.textContent = hasKey ? '✓ Configurada' : '✗ Não configurada';
+        apiKeyStatus.className = hasKey ? 'api-key-configured' : 'api-key-not-configured';
+    }
+    if (clearApiKeyBtn) {
+        clearApiKeyBtn.disabled = !hasKey;
+    }
+}
+
+function showApiKeyWarning(): void {
+    if (ttsErrorMessageDiv) {
+        ttsErrorMessageDiv.innerHTML = 'A Chave da API Gemini não está configurada. <button id="open-config-from-warning" class="btn-link">Clique aqui para configurar</button>';
+        ttsErrorMessageDiv.style.display = 'block';
+        
+        const openConfigLink = document.getElementById('open-config-from-warning');
+        if (openConfigLink) {
+            openConfigLink.onclick = openConfigModal;
+        }
+    }
+}
+
+function hideApiKeyWarning(): void {
+    if (ttsErrorMessageDiv && ttsErrorMessageDiv.textContent?.includes('não está configurada')) {
+        ttsErrorMessageDiv.style.display = 'none';
+    }
+}
+
+function openConfigModal(): void {
+    if (configModal) {
+        configModal.style.display = 'flex';
+        if (apiKeyInput) {
+            apiKeyInput.value = API_KEY || '';
+            apiKeyInput.focus();
+        }
+    }
+}
+
+function closeConfigModal(): void {
+    if (configModal) {
+        configModal.style.display = 'none';
+    }
+}
+
+function initializeAI(): void {
+    if (API_KEY) {
+        ai = new GoogleGenAI({ apiKey: API_KEY });
+        if (chatSection) {
+            initializeChat();
+        }
+    }
+}
+
+// Config Modal Event Listeners
+if (configButton) configButton.onclick = openConfigModal;
+if (saveApiKeyBtn) saveApiKeyBtn.onclick = saveApiKey;
+if (clearApiKeyBtn) clearApiKeyBtn.onclick = clearApiKey;
+if (closeConfigBtn) closeConfigBtn.onclick = closeConfigModal;
+
+// Close modal when clicking outside
+if (configModal) {
+    configModal.onclick = (e) => {
+        if (e.target === configModal) {
+            closeConfigModal();
+        }
+    };
+}
+
+// Allow Enter key to save API key
+if (apiKeyInput) {
+    apiKeyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            saveApiKey();
+        }
+    });
+}
 
 interface Speaker {
     id: string;
@@ -68,7 +194,6 @@ const availableVoices: VoiceOption[] = [
     { name: "Sadaltager", gender: "Masculino" }, { name: "Schedar", gender: "Masculino" },
     { name: "Umbriel", gender: "Masculino" }, { name: "Zubenelgenubi", gender: "Masculino" }
 ];
-
 
 let speakers: Speaker[] = [
     { id: `speaker-${Date.now()}-1`, name: "Locutor 1", voice: "Zephyr" },
@@ -128,8 +253,10 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         applyTheme('light');
     }
+    
+    // Load API Key on startup
+    loadApiKey();
 });
-
 
 // --- Base64 and ArrayBuffer Helper Functions ---
 function base64ToUint8Array(base64: string): Uint8Array {
@@ -237,7 +364,6 @@ function convertToWavBlob(base64AudioData: string, mimeType: string): Blob {
     return new Blob([new Uint8Array(wavBuffer)], { type: 'audio/wav' });
 }
 
-
 function getSpeakerSummary(currentSpeakers: Speaker[]): string {
     if (currentSpeakers.length === 0) return "Nenhum locutor configurado.";
     return currentSpeakers.map(s => {
@@ -259,7 +385,6 @@ function setupAudioVisualizer(audioElement: HTMLAudioElement, canvasElement: HTM
     const ctx = canvasElement.getContext('2d');
     if (!ctx) return;
 
-    // Use a flag to ensure we don't connect multiple sources to the same element
     // @ts-ignore
     if (audioElement._visualizerSetup) return;
 
@@ -277,7 +402,6 @@ function setupAudioVisualizer(audioElement: HTMLAudioElement, canvasElement: HTM
                 // @ts-ignore
                 audioElement._visualizerSetup = true;
             } catch (e) {
-                // If source already connected (e.g. strict CORS), visualization might fail but audio works
                 console.warn("Audio Visualizer connection failed:", e);
                 return;
             }
@@ -304,18 +428,14 @@ function setupAudioVisualizer(audioElement: HTMLAudioElement, canvasElement: HTM
         let x = 0;
 
         const isDark = document.body.classList.contains('dark-theme');
-        // Simple color generation
-        const rStart = isDark ? 138 : 66; // primary R
-        const gStart = isDark ? 180 : 133; // primary G
-        const bStart = isDark ? 248 : 244; // primary B
+        const rStart = isDark ? 138 : 66;
+        const gStart = isDark ? 180 : 133;
+        const bStart = isDark ? 248 : 244;
 
         for (let i = 0; i < bufferLength; i++) {
             barHeight = dataArray[i] / 255 * height;
-
-            // Make it dynamic
             ctx.fillStyle = `rgb(${rStart - (barHeight/2)}, ${gStart}, ${bStart})`;
             
-            // Rounded bars look nicer
             if (barHeight > 0) {
                  ctx.fillRect(x, height - barHeight, barWidth, barHeight);
             }
@@ -341,7 +461,6 @@ function setupAudioVisualizer(audioElement: HTMLAudioElement, canvasElement: HTM
     });
 }
 
-
 function renderAudioHistory() {
     if (!audioOutputContainer) return;
     audioOutputContainer.innerHTML = '';
@@ -365,17 +484,16 @@ function renderAudioHistory() {
         `;
         newAudioEntryDiv.appendChild(scriptDetailsDiv);
 
-        // Canvas for Visualization
         const canvas = document.createElement('canvas');
         canvas.className = 'audio-visualizer';
-        canvas.width = 600; // Intrinsic width
-        canvas.height = 100; // Intrinsic height
+        canvas.width = 600;
+        canvas.height = 100;
         newAudioEntryDiv.appendChild(canvas);
 
         const audioPlayer = document.createElement('audio');
         audioPlayer.controls = true;
         audioPlayer.src = entry.audioPlayerSrc;
-        audioPlayer.crossOrigin = "anonymous"; // Helps with MediaElementSource
+        audioPlayer.crossOrigin = "anonymous";
         audioPlayer.setAttribute('aria-label', `Reprodutor de áudio para ${entry.title}`);
         newAudioEntryDiv.appendChild(audioPlayer);
 
@@ -388,11 +506,9 @@ function renderAudioHistory() {
 
         audioOutputContainer.appendChild(newAudioEntryDiv);
 
-        // Setup Visualizer logic
         setupAudioVisualizer(audioPlayer, canvas);
     });
 }
-
 
 function renderSpeakers() {
     if (!speakerListDiv) return;
@@ -467,10 +583,7 @@ function addSpeaker() {
 
 async function handleGenerateSpeech() {
     if (!API_KEY) {
-        if (ttsErrorMessageDiv) {
-            ttsErrorMessageDiv.textContent = "Chave da API Gemini ausente. Não é possível gerar fala.";
-            ttsErrorMessageDiv.style.display = 'block';
-        }
+        showApiKeyWarning();
         return;
     }
     if (!scriptInput || !scriptInput.value.trim()) {
@@ -502,6 +615,11 @@ async function handleGenerateSpeech() {
         return;
     }
 
+    if (!ai) {
+        showApiKeyWarning();
+        return;
+    }
+
     if (loadingIndicator) loadingIndicator.style.display = 'flex';
     if (generateSpeechBtn) generateSpeechBtn.disabled = true;
     if (ttsErrorMessageDiv) {
@@ -526,7 +644,7 @@ async function handleGenerateSpeech() {
                 }
             }
         };
-    } else { // Assumes speakers.length is 2 due to previous checks
+    } else {
         const speakerConfigsForMulti = speakers.map(s => ({
             speaker: s.name,
             voiceConfig: {
@@ -545,8 +663,6 @@ async function handleGenerateSpeech() {
         };
     }
 
-    // IMPORTANT: Series 2.5 TTS models DO NOT support systemInstruction (preambles).
-    // We move the instruction to the user message to avoid Error 500/400 "Preambles not allowed".
     const ttsInstructionWrapper = `Perform the following script exactly as written with high expressiveness. Generate ONLY audio output. Do not include any text responses.
 
 SCRIPT:
@@ -611,7 +727,7 @@ ${currentScriptText}`;
             let finalMimeTypeForPlayer = audioMimeType;
             let finalFileExtension = audioMimeType.split('/')[1]?.split(';')[0] || 'raw';
 
-            if (audioMimeType.toLowerCase().startsWith("audio/l")) { // Covers audio/L16, audio/L24 etc.
+            if (audioMimeType.toLowerCase().startsWith("audio/l")) {
                 try {
                     audioBlob = convertToWavBlob(accumulatedAudioDataB64, audioMimeType);
                     finalMimeTypeForPlayer = "audio/wav";
@@ -622,7 +738,6 @@ ${currentScriptText}`;
                          ttsErrorMessageDiv.textContent = `Falha ao converter áudio ${audioMimeType} para WAV: ${conversionError.message}. O áudio pode não ser reproduzível.`;
                          ttsErrorMessageDiv.style.display = 'block';
                     }
-                    // Fallback to using raw data if conversion fails
                     const rawBytes = base64ToUint8Array(accumulatedAudioDataB64);
                     audioBlob = new Blob([rawBytes], {type: audioMimeType});
                 }
@@ -651,7 +766,6 @@ ${currentScriptText}`;
 
             audioHistory.unshift(newHistoryEntry);
             renderAudioHistory();
-            // Clear error message if it was related to informational text that's now superseded by success
             if (ttsErrorMessageDiv && informationalTextsFromStream.some(text => ttsErrorMessageDiv.textContent?.includes(text))) {
                  ttsErrorMessageDiv.textContent = '';
                  ttsErrorMessageDiv.style.display = 'none';
@@ -664,7 +778,7 @@ ${currentScriptText}`;
             } else if (!audioChunkFound) {
                 specificReason = "Nenhuma parte de áudio foi encontrada na resposta do modelo.";
             } else {
-                specificReason = "Nenhum dado de áudio utilizável foi recebido."; // Fallback
+                specificReason = "Nenhum dado de áudio utilizável foi recebido.";
             }
 
             let fullMessage = "";
@@ -713,9 +827,8 @@ ${currentScriptText}`;
 }
 
 // --- Chat Functionality ---
-
 function initializeChat() {
-    if (!API_KEY) {
+    if (!API_KEY || !ai) {
         if (chatErrorMessageDiv) {
             chatErrorMessageDiv.textContent = "Chave da API Gemini ausente. Não é possível iniciar o chat.";
             chatErrorMessageDiv.style.display = 'block';
@@ -787,17 +900,15 @@ function addCopyButtonsToPreBlocks(containerElement: HTMLElement) {
     });
 }
 
-
 function appendChatMessage(message: string, sender: 'user' | 'model', isStreaming: boolean = false): HTMLDivElement | null {
     if (!chatHistoryContainer) return null;
 
     if (isStreaming && sender === 'model') {
         let lastMessageDiv = chatHistoryContainer.lastElementChild as HTMLDivElement;
         if (lastMessageDiv && lastMessageDiv.classList.contains('model-message') && lastMessageDiv.dataset.streaming === 'true') {
-            // Append to existing streaming message
-            const tempDiv = document.createElement('div'); // Create a temporary div for parsing
-            tempDiv.innerHTML = marked.parse(message) as string; // Parse the new part
-            lastMessageDiv.innerHTML += tempDiv.innerHTML; // Append parsed HTML to existing
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = marked.parse(message) as string;
+            lastMessageDiv.innerHTML += tempDiv.innerHTML;
             chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
             return lastMessageDiv;
         }
@@ -811,7 +922,6 @@ function appendChatMessage(message: string, sender: 'user' | 'model', isStreamin
         messageDiv.dataset.streaming = 'true';
     }
 
-    // Add copy buttons only after streaming is complete or for non-streamed model messages
     if (sender === 'model' && !isStreaming) {
         addCopyButtonsToPreBlocks(messageDiv);
     }
@@ -821,12 +931,15 @@ function appendChatMessage(message: string, sender: 'user' | 'model', isStreamin
     return messageDiv;
 }
 
-
 async function handleSendChatMessage() {
     if (!API_KEY) {
         if (chatErrorMessageDiv) {
-            chatErrorMessageDiv.textContent = "Chave da API Gemini ausente. Não é possível enviar mensagem.";
+            chatErrorMessageDiv.innerHTML = 'Chave da API Gemini ausente. <button id="open-chat-config" class="btn-link">Configure aqui</button>';
             chatErrorMessageDiv.style.display = 'block';
+            const openChatConfig = document.getElementById('open-chat-config');
+            if (openChatConfig) {
+                openChatConfig.onclick = openConfigModal;
+            }
         }
         return;
     }
@@ -847,7 +960,6 @@ async function handleSendChatMessage() {
 
     appendChatMessage(messageText, 'user');
     chatInput.value = '';
-    // Reset height after sending
     chatInput.style.height = 'auto'; 
     chatInput.disabled = true;
     if (sendChatMessageBtn) sendChatMessageBtn.disabled = true;
@@ -867,20 +979,17 @@ async function handleSendChatMessage() {
             if (chunkText) {
                 accumulatedResponse += chunkText;
                 if (!currentModelMessageDiv) {
-                    // Create new div for the start of the model's response
                     currentModelMessageDiv = appendChatMessage('', 'model', true);
                 }
                 if (currentModelMessageDiv) {
-                    // Update existing streaming div with the full accumulated response, parsed
                     currentModelMessageDiv.innerHTML = marked.parse(accumulatedResponse) as string;
                     if (chatHistoryContainer) chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
                 }
             }
         }
         if (currentModelMessageDiv) {
-            // Final update after stream ends
             currentModelMessageDiv.innerHTML = marked.parse(accumulatedResponse) as string;
-            addCopyButtonsToPreBlocks(currentModelMessageDiv); // Add copy buttons now that content is final
+            addCopyButtonsToPreBlocks(currentModelMessageDiv);
             delete currentModelMessageDiv.dataset.streaming;
             if (chatHistoryContainer) chatHistoryContainer.scrollTop = chatHistoryContainer.scrollHeight;
         }
@@ -911,19 +1020,17 @@ async function handleSendChatMessage() {
     }
 }
 
-// --- Chat Input Auto-Resize ---
 function setupChatInputResize() {
     if (!chatInput) return;
     
     chatInput.addEventListener('input', function() {
-        this.style.height = 'auto'; // Reset height to recalculate
-        this.style.height = (this.scrollHeight) + 'px'; // Set new height
+        this.style.height = 'auto';
+        this.style.height = (this.scrollHeight) + 'px';
         if (this.value === '') {
-             this.style.height = 'auto'; // Reset if empty to default min-height via CSS
+             this.style.height = 'auto';
         }
     });
 }
-
 
 // Initial setup for TTS
 if (addSpeakerBtn) addSpeakerBtn.onclick = addSpeaker;
@@ -943,7 +1050,7 @@ if (scriptInput) {
 // Initial setup for Chat
 if (sendChatMessageBtn) sendChatMessageBtn.onclick = handleSendChatMessage;
 if (chatInput) {
-    setupChatInputResize(); // Enable auto-resize
+    setupChatInputResize();
     chatInput.addEventListener('keydown', (event: KeyboardEvent) => {
         if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
@@ -952,11 +1059,6 @@ if (chatInput) {
             }
         }
     });
-}
-
-// Initialize chat when the page loads if API key is present
-if (API_KEY && chatSection) {
-    initializeChat();
 }
 
 renderSpeakers();
