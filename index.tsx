@@ -3,42 +3,69 @@ import { GoogleGenAI, GenerateContentResponse, Chat, Modality } from "@google/ge
 import { marked } from "marked"; // For rendering Markdown from chat
 import { ttsManual } from "./ttsManual";
 
-// Ensure API_KEY is available in the environment.
-const API_KEY = process.env.API_KEY!;
+// API Key Management
+const apiKeyInput = document.getElementById('api-key-input') as HTMLInputElement | null;
+const saveApiKeyBtn = document.getElementById('save-api-key-btn') as HTMLButtonElement | null;
+const apiKeyStatus = document.getElementById('api-key-status') as HTMLSpanElement | null;
+const apiContainer = document.getElementById('api-key-container') as HTMLDivElement | null;
 
-// TTS Elements
-const scriptInput = document.getElementById('script-input') as HTMLTextAreaElement | null;
-const speakerListDiv = document.getElementById('speaker-list') as HTMLDivElement | null;
-const addSpeakerBtn = document.getElementById('add-speaker-btn') as HTMLButtonElement | null;
-const generateSpeechBtn = document.getElementById('generate-speech-btn') as HTMLButtonElement | null;
-const loadingIndicator = document.getElementById('loading-indicator') as HTMLDivElement | null; // For TTS
-const audioOutputContainer = document.getElementById('audio-output-container') as HTMLDivElement | null;
-const ttsErrorMessageDiv = document.getElementById('error-message') as HTMLDivElement | null;
-const modelSelector = document.getElementById('model-selector') as HTMLSelectElement | null;
+let API_KEY = localStorage.getItem('GEMINI_API_KEY') || process.env.API_KEY || '';
 
-// Chat Elements
-const chatSection = document.getElementById('chat-section') as HTMLElement | null;
-const chatHistoryContainer = document.getElementById('chat-history-container') as HTMLDivElement | null;
-const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement | null;
-const sendChatMessageBtn = document.getElementById('send-chat-message-btn') as HTMLButtonElement | null;
-const chatLoadingIndicator = document.getElementById('chat-loading-indicator') as HTMLDivElement | null; // For Chat
-const chatErrorMessageDiv = document.getElementById('chat-error-message') as HTMLDivElement | null;
+function updateApiKeyStatus(message: string, type: 'success' | 'error' | 'info') {
+    if (!apiKeyStatus) return;
+    apiKeyStatus.textContent = message;
+    apiKeyStatus.className = 'api-key-status'; // Reset
+    if (type === 'success') apiKeyStatus.classList.add('text-success'); // Assuming bootstrap or custom class, but verify css
+    apiKeyStatus.style.color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--text-secondary)';
+    
+    setTimeout(() => {
+        apiKeyStatus.textContent = '';
+    }, 3000);
+}
 
-let geminiChat: Chat | null = null;
+if (apiKeyInput) {
+    // Determine if we should mask the key initially
+    if (API_KEY) {
+        apiKeyInput.value = API_KEY;
+    }
 
-// Theme Toggle Elements
-const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement | null;
-
-
-if (!API_KEY) {
-    console.error("API_KEY is missing. Please set the environment variable.");
-    if (ttsErrorMessageDiv) {
-        ttsErrorMessageDiv.textContent = "A Chave da API Gemini não está configurada. Por favor, garanta que a variável de ambiente API_KEY esteja definida.";
-        ttsErrorMessageDiv.style.display = 'block';
+    if (saveApiKeyBtn) {
+        saveApiKeyBtn.onclick = () => {
+            const newKey = apiKeyInput.value.trim();
+            if (newKey) {
+                API_KEY = newKey;
+                localStorage.setItem('GEMINI_API_KEY', newKey);
+                updateApiKeyStatus('Chave salva!', 'success');
+                // Re-initialize AI client
+                initializeAiClient();
+                initializeChat(); // Re-init chat with new key
+                
+                // Hide error messages if they were visible
+                if (ttsErrorMessageDiv) ttsErrorMessageDiv.style.display = 'none';
+                if (chatErrorMessageDiv) chatErrorMessageDiv.style.display = 'none';
+            } else {
+                updateApiKeyStatus('Chave vazia!', 'error');
+            }
+        };
     }
 }
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
+let ai: GoogleGenAI;
+
+function initializeAiClient() {
+    if (API_KEY) {
+        ai = new GoogleGenAI({ apiKey: API_KEY });
+    } else {
+        console.warn("API Key not found. Please enter it in the UI.");
+    }
+}
+
+initializeAiClient();
+
+if (!API_KEY) {
+    if (apiKeyInput) apiKeyInput.focus();
+    // Errors will be shown when user tries to interact
+}
 
 interface Speaker {
     id: string;
