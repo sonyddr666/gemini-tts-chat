@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini TTS Pro</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎙️</text></svg>">
+    <link rel="stylesheet" href="pro.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="logo">🎙️ TTS Pro</h1>
+                <a href="index.html" class="back-link">← Versão Clássica</a>
+            </div>
+
+            <!-- API Key Section -->
+            <div class="sidebar-section">
+                <h3 class="section-title">🔑 API Key</h3>
+                <div class="api-key-group">
+                    <input type="password" id="api-key-input" placeholder="Cole sua chave API" class="input-field">
+                    <button id="save-api-key-btn" class="btn btn-primary btn-sm">Salvar</button>
+                </div>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="help-link">Obter chave gratuita
+                    →</a>
+                <span id="api-key-status" class="status-text"></span>
+            </div>
+
+            <!-- Voice Presets -->
+            <div class="sidebar-section">
+                <h3 class="section-title">🎤 Vozes Rápidas</h3>
+                <div class="voice-presets">
+                    <button class="preset-btn" data-voice="Zephyr" data-gender="F">Zephyr ♀</button>
+                    <button class="preset-btn" data-voice="Kore" data-gender="F">Kore ♀</button>
+                    <button class="preset-btn" data-voice="Puck" data-gender="M">Puck ♂</button>
+                    <button class="preset-btn" data-voice="Charon" data-gender="M">Charon ♂</button>
+                    <button class="preset-btn" data-voice="Fenrir" data-gender="M">Fenrir ♂</button>
+                    <button class="preset-btn" data-voice="Aoede" data-gender="F">Aoede ♀</button>
+                </div>
+            </div>
+
+            <!-- Model Selection -->
+            <div class="sidebar-section">
+                <h3 class="section-title">⚡ Modelo</h3>
+                <select id="model-selector" class="select-field">
+                    <option value="gemini-2.5-flash-preview-tts" selected>Flash (Rápido)</option>
+                    <option value="gemini-2.5-pro-preview-tts">Pro (Qualidade)</option>
+                </select>
+            </div>
+
+            <!-- Speaker Config -->
+            <div class="sidebar-section">
+                <h3 class="section-title">👥 Locutores</h3>
+                <div id="speaker-list" class="speaker-list"></div>
+                <button id="add-speaker-btn" class="btn btn-secondary btn-block">+ Adicionar</button>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- TTS Panel -->
+            <section class="panel tts-panel">
+                <div class="panel-header">
+                    <h2>📝 Texto para Fala</h2>
+                    <div id="error-message" class="error-toast" style="display: none;"></div>
+                </div>
+
+                <textarea id="script-input" class="script-textarea" placeholder="Digite seu roteiro aqui...
+
+Exemplo com múltiplos locutores:
+Locutor 1: Olá! Bem-vindo ao TTS Pro.
+Locutor 2: Vamos criar áudios incríveis juntos!"></textarea>
+
+                <div class="action-bar">
+                    <button id="generate-speech-btn" class="btn btn-primary btn-lg">
+                        <span class="btn-icon">🎵</span> Gerar Fala
+                    </button>
+                    <div id="loading-indicator" class="loading-spinner" style="display: none;">
+                        <div class="spinner"></div>
+                        <span>Gerando...</span>
+                    </div>
+                </div>
+
+                <!-- Audio Output -->
+                <div id="audio-output-container" class="audio-list"></div>
+            </section>
+
+            <!-- Chat Panel -->
+            <section class="panel chat-panel">
+                <div class="panel-header">
+                    <h2>💬 Assistente TTS</h2>
+                    <div id="chat-error-message" class="error-toast" style="display: none;"></div>
+                </div>
+
+                <div id="chat-history-container" class="chat-messages"></div>
+
+                <div class="chat-input-area">
+                    <textarea id="chat-input" class="chat-textarea"
+                        placeholder="Pergunte como criar prompts expressivos..." rows="2"></textarea>
+                    <button id="send-chat-message-btn" class="btn btn-primary btn-icon-only">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"></line>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                        </svg>
+                    </button>
+                </div>
+                <div id="chat-loading-indicator" class="loading-spinner" style="display: none;">
+                    <div class="spinner"></div>
+                    <span>Pensando...</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Theme Toggle (floating) -->
+    <button id="theme-toggle-btn" class="theme-toggle" title="Alternar tema">
+        <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path
+                d="M12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18M20,15.31L23.31,12L20,8.69V4H15.31L12,0.69L8.69,4H4V8.69L0.69,12L4,15.31V20H8.69L12,23.31L15.31,20H20V15.31Z" />
+        </svg>
+        <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none;">
+            <path
+                d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95M17.33,17.97C14.5,17.81 11.7,16.64 9.53,14.5C7.36,12.31 6.2,9.5 6.04,6.68C3.23,9.82 3.34,14.64 6.35,17.66C9.37,20.67 14.19,20.78 17.33,17.97Z" />
+        </svg>
+    </button>
+
+    <script type="importmap">
+    {
+        "imports": {
+            "@google/genai": "https://esm.sh/@google/genai@^1.5.1",
+            "marked": "https://esm.sh/marked@^15.0.12"
+        }
+    }
+    </script>
+    <script type="module" src="pro.tsx"></script>
+</body>
+
+</html>
