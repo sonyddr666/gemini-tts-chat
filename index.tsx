@@ -660,11 +660,11 @@ ${currentScriptText}`;
                     }
                     // Fallback to using raw data if conversion fails
                     const rawBytes = base64ToUint8Array(accumulatedAudioDataB64);
-                    audioBlob = new Blob([rawBytes], { type: audioMimeType });
+                    audioBlob = new Blob([rawBytes.buffer as ArrayBuffer], { type: audioMimeType });
                 }
             } else {
                 const rawBytes = base64ToUint8Array(accumulatedAudioDataB64);
-                audioBlob = new Blob([rawBytes], { type: audioMimeType });
+                audioBlob = new Blob([rawBytes.buffer as ArrayBuffer], { type: audioMimeType });
             }
 
             const audioPlayerSrc = URL.createObjectURL(audioBlob);
