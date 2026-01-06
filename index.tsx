@@ -3,69 +3,78 @@ import { GoogleGenAI, GenerateContentResponse, Chat, Modality } from "@google/ge
 import { marked } from "marked"; // For rendering Markdown from chat
 import { ttsManual } from "./ttsManual";
 
-// API Key Management
+// API Key Management - supports localStorage or environment variable
 const apiKeyInput = document.getElementById('api-key-input') as HTMLInputElement | null;
 const saveApiKeyBtn = document.getElementById('save-api-key-btn') as HTMLButtonElement | null;
 const apiKeyStatus = document.getElementById('api-key-status') as HTMLSpanElement | null;
-const apiContainer = document.getElementById('api-key-container') as HTMLDivElement | null;
 
 let API_KEY = localStorage.getItem('GEMINI_API_KEY') || process.env.API_KEY || '';
 
+// TTS Elements
+const scriptInput = document.getElementById('script-input') as HTMLTextAreaElement | null;
+const speakerListDiv = document.getElementById('speaker-list') as HTMLDivElement | null;
+const addSpeakerBtn = document.getElementById('add-speaker-btn') as HTMLButtonElement | null;
+const generateSpeechBtn = document.getElementById('generate-speech-btn') as HTMLButtonElement | null;
+const loadingIndicator = document.getElementById('loading-indicator') as HTMLDivElement | null;
+const audioOutputContainer = document.getElementById('audio-output-container') as HTMLDivElement | null;
+const ttsErrorMessageDiv = document.getElementById('error-message') as HTMLDivElement | null;
+const modelSelector = document.getElementById('model-selector') as HTMLSelectElement | null;
+
+// Chat Elements
+const chatSection = document.getElementById('chat-section') as HTMLElement | null;
+const chatHistoryContainer = document.getElementById('chat-history-container') as HTMLDivElement | null;
+const chatInput = document.getElementById('chat-input') as HTMLTextAreaElement | null;
+const sendChatMessageBtn = document.getElementById('send-chat-message-btn') as HTMLButtonElement | null;
+const chatLoadingIndicator = document.getElementById('chat-loading-indicator') as HTMLDivElement | null;
+const chatErrorMessageDiv = document.getElementById('chat-error-message') as HTMLDivElement | null;
+
+let geminiChat: Chat | null = null;
+
+// Theme Toggle Elements
+const themeToggleBtn = document.getElementById('theme-toggle-btn') as HTMLButtonElement | null;
+
+// API Key status update helper
 function updateApiKeyStatus(message: string, type: 'success' | 'error' | 'info') {
     if (!apiKeyStatus) return;
     apiKeyStatus.textContent = message;
-    apiKeyStatus.className = 'api-key-status'; // Reset
-    if (type === 'success') apiKeyStatus.classList.add('text-success'); // Assuming bootstrap or custom class, but verify css
     apiKeyStatus.style.color = type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--danger)' : 'var(--text-secondary)';
-    
-    setTimeout(() => {
-        apiKeyStatus.textContent = '';
-    }, 3000);
+    setTimeout(() => { apiKeyStatus.textContent = ''; }, 3000);
 }
 
-if (apiKeyInput) {
-    // Determine if we should mask the key initially
-    if (API_KEY) {
-        apiKeyInput.value = API_KEY;
-    }
-
-    if (saveApiKeyBtn) {
-        saveApiKeyBtn.onclick = () => {
-            const newKey = apiKeyInput.value.trim();
-            if (newKey) {
-                API_KEY = newKey;
-                localStorage.setItem('GEMINI_API_KEY', newKey);
-                updateApiKeyStatus('Chave salva!', 'success');
-                // Re-initialize AI client
-                initializeAiClient();
-                initializeChat(); // Re-init chat with new key
-                
-                // Hide error messages if they were visible
-                if (ttsErrorMessageDiv) ttsErrorMessageDiv.style.display = 'none';
-                if (chatErrorMessageDiv) chatErrorMessageDiv.style.display = 'none';
-            } else {
-                updateApiKeyStatus('Chave vazia!', 'error');
-            }
-        };
-    }
+// Load saved API key into input field
+if (apiKeyInput && API_KEY) {
+    apiKeyInput.value = API_KEY;
 }
 
-let ai: GoogleGenAI;
-
-function initializeAiClient() {
-    if (API_KEY) {
-        ai = new GoogleGenAI({ apiKey: API_KEY });
-    } else {
-        console.warn("API Key not found. Please enter it in the UI.");
-    }
+// Save API key button handler
+if (saveApiKeyBtn && apiKeyInput) {
+    saveApiKeyBtn.onclick = () => {
+        const newKey = apiKeyInput.value.trim();
+        if (newKey) {
+            API_KEY = newKey;
+            localStorage.setItem('GEMINI_API_KEY', newKey);
+            updateApiKeyStatus('Chave salva!', 'success');
+            // Reinitialize AI client and chat
+            ai = new GoogleGenAI({ apiKey: API_KEY });
+            initializeChat();
+            if (ttsErrorMessageDiv) ttsErrorMessageDiv.style.display = 'none';
+            if (chatErrorMessageDiv) chatErrorMessageDiv.style.display = 'none';
+        } else {
+            updateApiKeyStatus('Chave vazia!', 'error');
+        }
+    };
 }
-
-initializeAiClient();
 
 if (!API_KEY) {
+    console.warn("API_KEY is missing. Please enter it in the UI.");
     if (apiKeyInput) apiKeyInput.focus();
-    // Errors will be shown when user tries to interact
+    if (ttsErrorMessageDiv) {
+        ttsErrorMessageDiv.textContent = "Insira sua Chave API Gemini no campo acima. Obtenha uma chave gratuita em aistudio.google.com";
+        ttsErrorMessageDiv.style.display = 'block';
+    }
 }
+
+let ai = new GoogleGenAI({ apiKey: API_KEY || 'placeholder' });
 
 interface Speaker {
     id: string;
@@ -227,9 +236,9 @@ function parseAudioMimeTypeParams(mimeType: string): AudioMimeParams {
             }
         }
     }
-    if (isNaN(sampleRate) || sampleRate <=0) sampleRate = 24000;
+    if (isNaN(sampleRate) || sampleRate <= 0) sampleRate = 24000;
     if (isNaN(bitsPerSample) || ![8, 16, 24, 32].includes(bitsPerSample)) bitsPerSample = 16;
-    if (isNaN(numChannels) || numChannels <=0) numChannels = 1;
+    if (isNaN(numChannels) || numChannels <= 0) numChannels = 1;
     return { sampleRate, bitsPerSample, numChannels };
 }
 
@@ -296,7 +305,7 @@ function setupAudioVisualizer(audioElement: HTMLAudioElement, canvasElement: HTM
             audioContext = new AudioContextClass();
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
-            
+
             try {
                 source = audioContext.createMediaElementSource(audioElement);
                 source.connect(analyser);
@@ -309,7 +318,7 @@ function setupAudioVisualizer(audioElement: HTMLAudioElement, canvasElement: HTM
                 return;
             }
         }
-        
+
         if (audioContext.state === 'suspended') {
             audioContext.resume();
         }
@@ -340,11 +349,11 @@ function setupAudioVisualizer(audioElement: HTMLAudioElement, canvasElement: HTM
             barHeight = dataArray[i] / 255 * height;
 
             // Make it dynamic
-            ctx.fillStyle = `rgb(${rStart - (barHeight/2)}, ${gStart}, ${bStart})`;
-            
+            ctx.fillStyle = `rgb(${rStart - (barHeight / 2)}, ${gStart}, ${bStart})`;
+
             // Rounded bars look nicer
             if (barHeight > 0) {
-                 ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+                ctx.fillRect(x, height - barHeight, barWidth, barHeight);
             }
 
             x += barWidth + 1;
@@ -359,12 +368,12 @@ function setupAudioVisualizer(audioElement: HTMLAudioElement, canvasElement: HTM
     });
 
     audioElement.addEventListener('pause', () => {
-         cancelAnimationFrame(animationId);
+        cancelAnimationFrame(animationId);
     });
 
     audioElement.addEventListener('ended', () => {
-         cancelAnimationFrame(animationId);
-         ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        cancelAnimationFrame(animationId);
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
     });
 }
 
@@ -427,7 +436,7 @@ function renderSpeakers() {
     speakers.forEach((speaker, index) => {
         const entryDiv = document.createElement('div');
         entryDiv.className = 'speaker-entry';
-        entryDiv.setAttribute('aria-label', `Configuração para ${speaker.name || `Locutor ${index + 1}` }`);
+        entryDiv.setAttribute('aria-label', `Configuração para ${speaker.name || `Locutor ${index + 1}`}`);
 
         const nameInput = document.createElement('input');
         nameInput.type = 'text';
@@ -478,7 +487,7 @@ function renderSpeakers() {
 
 function addSpeaker() {
     if (speakers.length >= 2) {
-         if (ttsErrorMessageDiv) {
+        if (ttsErrorMessageDiv) {
             ttsErrorMessageDiv.textContent = "Para esta demonstração, a funcionalidade de múltiplos locutores é limitada a 2. Para usar um único locutor, remova um dos existentes.";
             ttsErrorMessageDiv.style.display = 'block';
         }
@@ -487,7 +496,7 @@ function addSpeaker() {
     speakers.push({
         id: `speaker-${Date.now()}-${speakers.length + 1}`,
         name: `Locutor ${speakers.length + 1}`,
-        voice: availableVoices[ (speakers.length % availableVoices.length) ].name
+        voice: availableVoices[(speakers.length % availableVoices.length)].name
     });
     renderSpeakers();
 }
@@ -522,7 +531,7 @@ async function handleGenerateSpeech() {
         return;
     }
     if (speakers.length > 2) {
-         if (ttsErrorMessageDiv) {
+        if (ttsErrorMessageDiv) {
             ttsErrorMessageDiv.textContent = "Esta demonstração suporta 1 locutor ou, para múltiplos locutores, exatamente 2. Por favor, ajuste o número de locutores.";
             ttsErrorMessageDiv.style.display = 'block';
         }
@@ -557,7 +566,7 @@ async function handleGenerateSpeech() {
         const speakerConfigsForMulti = speakers.map(s => ({
             speaker: s.name,
             voiceConfig: {
-                 prebuiltVoiceConfig: {
+                prebuiltVoiceConfig: {
                     voiceName: s.voice
                 }
             }
@@ -618,7 +627,7 @@ ${currentScriptText}`;
                     }
                     if (inlineData.mimeType) {
                         if (inlineData.mimeType.startsWith("audio/")) {
-                             audioMimeType = inlineData.mimeType;
+                            audioMimeType = inlineData.mimeType;
                         } else if (inlineData.mimeType === "application/octet-stream" && (inlineData.data || accumulatedAudioDataB64)) {
                             audioMimeType = "audio/L16";
                         }
@@ -645,17 +654,17 @@ ${currentScriptText}`;
                     finalFileExtension = "wav";
                 } catch (conversionError: any) {
                     console.error("Failed to convert L-PCM to WAV Blob:", conversionError);
-                     if (ttsErrorMessageDiv && (!ttsErrorMessageDiv.textContent || ttsErrorMessageDiv.style.display === 'none')) {
-                         ttsErrorMessageDiv.textContent = `Falha ao converter áudio ${audioMimeType} para WAV: ${conversionError.message}. O áudio pode não ser reproduzível.`;
-                         ttsErrorMessageDiv.style.display = 'block';
+                    if (ttsErrorMessageDiv && (!ttsErrorMessageDiv.textContent || ttsErrorMessageDiv.style.display === 'none')) {
+                        ttsErrorMessageDiv.textContent = `Falha ao converter áudio ${audioMimeType} para WAV: ${conversionError.message}. O áudio pode não ser reproduzível.`;
+                        ttsErrorMessageDiv.style.display = 'block';
                     }
                     // Fallback to using raw data if conversion fails
                     const rawBytes = base64ToUint8Array(accumulatedAudioDataB64);
-                    audioBlob = new Blob([rawBytes], {type: audioMimeType});
+                    audioBlob = new Blob([rawBytes], { type: audioMimeType });
                 }
             } else {
-                 const rawBytes = base64ToUint8Array(accumulatedAudioDataB64);
-                 audioBlob = new Blob([rawBytes], {type: audioMimeType});
+                const rawBytes = base64ToUint8Array(accumulatedAudioDataB64);
+                audioBlob = new Blob([rawBytes], { type: audioMimeType });
             }
 
             const audioPlayerSrc = URL.createObjectURL(audioBlob);
@@ -680,8 +689,8 @@ ${currentScriptText}`;
             renderAudioHistory();
             // Clear error message if it was related to informational text that's now superseded by success
             if (ttsErrorMessageDiv && informationalTextsFromStream.some(text => ttsErrorMessageDiv.textContent?.includes(text))) {
-                 ttsErrorMessageDiv.textContent = '';
-                 ttsErrorMessageDiv.style.display = 'none';
+                ttsErrorMessageDiv.textContent = '';
+                ttsErrorMessageDiv.style.display = 'none';
             }
 
         } else {
@@ -704,7 +713,7 @@ ${currentScriptText}`;
             } else {
                 fullMessage = `Falha ao gerar áudio: ${specificReason}. Nenhuma informação adicional foi retornada. Isso pode ser um problema temporário. ${adviceFooter}`;
             }
-            
+
             if (ttsErrorMessageDiv) {
                 ttsErrorMessageDiv.textContent = fullMessage;
                 ttsErrorMessageDiv.style.display = 'block';
@@ -726,7 +735,7 @@ ${currentScriptText}`;
             } else if (error.message.includes("Preambles (System Instructions) passed to AudioOut model")) {
                 displayError = "Erro técnico: Instruções do sistema não são permitidas para este modelo de áudio. Reporte este erro.";
             } else {
-                 displayError = `Falha ao gerar fala: ${error.message}`;
+                displayError = `Falha ao gerar fala: ${error.message}`;
             }
         }
         if (ttsErrorMessageDiv) {
@@ -760,7 +769,7 @@ ${ttsManual}
         geminiChat = ai.chats.create({
             model: 'gemini-3-flash-preview',
             config: {
-                 systemInstruction: systemInstruction,
+                systemInstruction: systemInstruction,
             },
         });
         if (chatErrorMessageDiv) {
@@ -860,7 +869,7 @@ async function handleSendChatMessage() {
     if (!geminiChat) {
         initializeChat();
         if (!geminiChat) {
-             if (chatErrorMessageDiv) {
+            if (chatErrorMessageDiv) {
                 chatErrorMessageDiv.textContent = "Sessão de chat não iniciada. Tente novamente.";
                 chatErrorMessageDiv.style.display = 'block';
             }
@@ -875,7 +884,7 @@ async function handleSendChatMessage() {
     appendChatMessage(messageText, 'user');
     chatInput.value = '';
     // Reset height after sending
-    chatInput.style.height = 'auto'; 
+    chatInput.style.height = 'auto';
     chatInput.disabled = true;
     if (sendChatMessageBtn) sendChatMessageBtn.disabled = true;
     if (chatLoadingIndicator) chatLoadingIndicator.style.display = 'flex';
@@ -921,7 +930,7 @@ async function handleSendChatMessage() {
             } else if (error.message.toLowerCase().includes("quota") || error.message.toLowerCase().includes("rate limit") || error.message.toLowerCase().includes("resource_exhausted")) {
                 displayError = "Você excedeu sua cota da API Gemini (Quota exceeded). Tente novamente em alguns segundos ou verifique se atingiu o limite diário.";
             } else {
-                 displayError = `Erro no chat: ${error.message}`;
+                displayError = `Erro no chat: ${error.message}`;
             }
         }
         if (chatErrorMessageDiv) {
@@ -941,12 +950,12 @@ async function handleSendChatMessage() {
 // --- Chat Input Auto-Resize ---
 function setupChatInputResize() {
     if (!chatInput) return;
-    
-    chatInput.addEventListener('input', function() {
+
+    chatInput.addEventListener('input', function () {
         this.style.height = 'auto'; // Reset height to recalculate
         this.style.height = (this.scrollHeight) + 'px'; // Set new height
         if (this.value === '') {
-             this.style.height = 'auto'; // Reset if empty to default min-height via CSS
+            this.style.height = 'auto'; // Reset if empty to default min-height via CSS
         }
     });
 }
